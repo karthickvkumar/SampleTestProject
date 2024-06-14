@@ -1,205 +1,34 @@
-// Script //
+pipeline {
+    agent any
 
-pipeline
-{
-	agent 
-	{ 
-	    label 'vs15'
+    environment {
+        ProjectName = 'UnitTestProject'
+        BuildConfiguration = 'Release'
     }
-	stages
-	{
-		stage('Save paramaters for next run')
-		{
-			steps 
-			{
-				script 
-				{
-					if (params.BuildVersion != null){
-						properties([
-							parameters([
-								string(defaultValue: "${BuildVersion}", description: 'build version', name: 'BuildVersion', trim: true),
-								string(defaultValue: "${BuildDescription}", description: 'build description', name: 'BuildDescription', trim: true),
-								string(defaultValue: "${SVNLocation}", description: 'svn location', name: 'SVNLocation', trim: true),
-								string(defaultValue: "${ProjectKey}", description: 'project key', name: 'ProjectKey', trim: true),
-								string(defaultValue: "${ProjectName}", description: 'project name', name: 'ProjectName', trim: true),
-								choice(choices: ['Release', 'Debug'], description: 'build configuration', name: 'BuildConfiguration'),
-								booleanParam(defaultValue: false, description: 'Do you want to run unit test on this project?', name: 'RunUnitTestMethods'),
-								booleanParam(defaultValue: true, description: 'Do you want to perform Security Analysis on this project?', name: 'RunSecurityAnalysis'),
-								choice(choices: ['No', 'Dev Build', 'Test Build', 'Stage Build', 'Release Candidate Build'], description: 'Run Veracode scan?', name: 'RunVeracodeScan')
-							])
-						])
-					}
-					else{
-						properties([
-							parameters([
-								string(defaultValue: "", description: 'build version', name: 'BuildVersion', trim: true),
-								string(defaultValue: "", description: 'build description', name: 'BuildDescription', trim: true),
-								string(defaultValue: "", description: 'svn location', name: 'SVNLocation', trim: true),
-								string(defaultValue: "", description: 'project key', name: 'ProjectKey', trim: true),
-								string(defaultValue: "", description: 'project name', name: 'ProjectName', trim: true),
-								choice(choices: ['Release', 'Debug'], description: 'build configuration', name: 'BuildConfiguration'),
-								booleanParam(defaultValue: false, description: 'Do you want to run unit test on this project?', name: 'RunUnitTestMethods'),
-								booleanParam(defaultValue: true, description: 'Do you want to perform Security Analysis on this project?', name: 'RunSecurityAnalysis'),
-								choice(choices: ['No', 'Dev Build', 'Test Build', 'Stage Build', 'Release Candidate Build'], description: 'Run Veracode scan?', name: 'RunVeracodeScan')
-							])
-						])
-					}
-				}
-			}
-		}
-		stage('Build Start Notification')
-		{
-		    steps
-		    {
-		        emailext attachLog: false, body: 'BUILD DESCRIPTION: ${BuildDescription}', recipientProviders: [requestor()], subject: 'Build Creation Notification - $PROJECT_NAME ${BuildVersion} ${BuildDescription}'
-		    }
-		}
-		stage('Change Assembly Version')
-		{
-			steps
-			{
-				changeAsmVer assemblyCompany: '', assemblyCopyright: '', assemblyCulture: '', assemblyDescription: '', assemblyFile: '', assemblyProduct: '', assemblyTitle: '', assemblyTrademark: '', regexPattern: '', replacementPattern: '', versionPattern: '$BuildVersion'
-				echo "${BuildVersion}"
-			}
-			
-		}
-		stage('Build + SonarQube analysis') 
-		{
-			steps 
-			{ 
-				script
-                {
-					if(params.RunSecurityAnalysis) 
-					{
-						echo "Sonar Scanner will be performed"
-						nodejs('NodeJS')
-						{
-							def sqScannerMsBuildHome = tool 'SonarForMSBuild'
-							withSonarQubeEnv(credentialsId: 'fe83de98-08c2-4338-b28f-7fdbbe465c97', installationName: 'Sonar-Staging')
-							{
-								bat label: 'BuildProcess', script: "nuget.exe restore ${ProjectName}.sln"
-								
-								bat "\"${sqScannerMsBuildHome}\\SonarScanner.MSBuild.exe\" begin /k:${ProjectKey} /n:${ProjectName} /v:${BuildVersion}"
-								bat label: 'BuildProcess', script: "\"${tool name:'MSBuild15', type:'msbuild'}MSBuild.exe\" ${ProjectName}.sln /t:restore,rebuild /p:Configuration=${BuildConfiguration},RestorePackagesConfig=true"	
-								bat "\"${sqScannerMsBuildHome}\\SonarScanner.MSBuild.exe\" end"
-							}
-						}
-					}
-					else
-					{
-						echo "Security Analysis option is not selected, so skipping Sonar Scanner..."
-						bat label: 'BuildProcess', script: "nuget.exe restore ${ProjectName}.sln"
-						bat label: 'BuildProcess', script: "\"${tool name:'MSBuild15', type:'msbuild'}MSBuild.exe\" ${ProjectName}.sln /t:restore,rebuild /p:Configuration=${BuildConfiguration},RestorePackagesConfig=true"	
-					}
-
-					if(params.BuildConfiguration == "Release")
-					{
-							bat label: 'BuildProcess', script: "\"${tool name:'MSBuild15', type:'msbuild'}MSBuild.exe\" ${ProjectName}.sln /t:restore,rebuild /p:Configuration=Debug,RestorePackagesConfig=true"	
-					}
-				}
-		   }
-		}
-		stage('Run Unit Test')
-		{
-			steps
-			{
-				vsTest settings: "test\\bin\\${BuildConfiguration}\\test.runsettings", testFiles: "test\\bin\\${BuildConfiguration}\\BlueRibbonIP.ServiceView.Tests.dll"
-				mstest testResultsFile: "test\\bin\\${BuildConfiguration}\\*.trx", keepLongStdio: true
-			}
-		}
-		stage ('OWASP Dependency Check') 
-		{
-			steps {
-				script {
-					if(params.RunSecurityAnalysis) {
-						echo "OWASP Dependency Check will be performed now."
-						
-						dependencyCheck additionalArguments: '-o "Security/OWASPDepdendencyCheck" -s "./" -f "ALL" --prettyPrint  --disableYarnAudit --exclude /*.json/ --exclude /node_modules/ --disableOssIndex', odcInstallation: 'OWASP Dependency Checker'
-						dependencyCheckPublisher pattern: 'Security/OWASPDepdendencyCheck/dependency-check-report.xml'
-						emailext attachmentsPattern: 'Security/OWASPDepdendencyCheck/dependency-check-report.html', attachLog: false, body: '$DEFAULT_CONTENT', recipientProviders: [requestor()], subject: 'OWASP Dependency Check Results for $PROJECT_NAME Version - ${BuildVersion}'
-					}
-					else {
-						echo "Security Analysis option is not selected, so skipping OWASP Dependency Check..."
-					}
-				}
-			}
-		}
-
-		stage('Upload to Veracode')
-    {
-			when {
-				expression { params.RunVeracodeScan != 'No' }
-			}
-			steps
-			{
-				echo "Copy/Paste the published folder into temp folder called Veracode/Publish"
-
-				script
-				{
-					fileOperations([
-						folderCreateOperation('Veracode/Publish'),
-						folderCopyOperation(destinationFolderPath: 'Veracode/Publish', sourceFolderPath: 'bin/Debug/')
-					])
-
-					echo "Zipping and moving the published folder to the build location -- START"
-					echo "Zipping the published folder with config files"
-					zip dir: "Veracode/Publish/", glob: '', zipFile: "Veracode/Publish/VeracodeUploadAndScan-${ProjectName}-${BuildVersion}-${BuildConfiguration}.zip"
-				}
-
-				echo "Uploading to Veracode"
-
-				withCredentials([usernamePassword(credentialsId: 'veracode-api-user', usernameVariable: 'UserName', passwordVariable: 'UserPwd')])
-				{
-					veracode applicationName: "Cloud Fax - ${ProjectName}", 
-						canFailJob: true, 
-						createProfile: true, 
-						createSandbox: true, 
-						//criticality: 'VeryHigh', 
-						deleteIncompleteScanLevel: '2', 
-						fileNamePattern: '', 
-						replacementPattern: '', 
-						sandboxName: "Sandbox ${params.RunVeracodeScan}", 
-						scanExcludesPattern: '', 
-						scanIncludesPattern: '', 
-						scanName: "${ProjectName}-${BuildVersion}-${BuildConfiguration}-Build-${BUILD_NUMBER}", 
-						//teams: 'Cloud Fax', 
-						uploadIncludesPattern: '**/VeracodeUploadAndScan-*.zip', 
-						vid: "${UserName}", vkey: "${UserPwd}"
-				}
-			}
+    
+    stages {
+        stage('Build') {
+            steps {
+              bat label: 'BuildProcess', script: "\"${tool name:'MSBuild15', type:'msbuild'}MSBuild.exe\" ${ProjectName}.sln /t:restore,rebuild /p:Configuration=Debug,RestorePackagesConfig=true"
+            }
+        }
+        stage('Run Tests') {
+            steps
+            {
+              vsTest settings: "bin\\${BuildConfiguration}\\test.runsettings", testFiles: "bin\\${BuildConfiguration}\\BlueRibbonIP.ServiceView.Tests.dll"
+              mstest testResultsFile: "bin\\${BuildConfiguration}\\*.trx", keepLongStdio: true
+            }
+        }
     }
-		
-		stage('Commit')
-		{
-			steps 
-			{
-				echo "Workspace : ${WORKSPACE}"
-				withCredentials([usernamePassword(credentialsId: 'e3d621cb-87bd-4f91-8818-8e6b0cd074ee', passwordVariable: 'SVNPassword', usernameVariable: 'SVNUserName')]) 
-				{
-					bat label: "SVN Upgrade", script: "svn upgrade"
-					bat label: "SVN Commit", script: "svn commit -m \"Build created for ${ProjectName} - ${BuildVersion}. Build Description : ${BuildDescription}\" --username \"${SVNUserName}\" --password \"${SVNPassword}\" --non-interactive"
-				}
-			}
-		}
-		stage('Cleanup')
-		{
-			steps 
-			{
-				cleanWs()
-			}
-		}
-	}
-	post 
-	{
-		success 
-		{
-			emailext attachLog: true, body: '$DEFAULT_CONTENT', recipientProviders: [requestor()], subject: 'Build Results for $PROJECT_NAME - SUCCESS. Version - ${BuildVersion}'
-		}
-		failure 
-		{
-			emailext attachLog: true, body: '$DEFAULT_CONTENT', recipientProviders: [requestor()], subject: 'Build Results for $PROJECT_NAME - FAILED. Version - ${BuildVersion}'
-		}
-	}
+    post {
+        always {
+            cleanWs()
+        }
+        success {
+            echo 'Build and deploy successful.'
+        }
+        failure {
+            echo 'Build or deploy failed.'
+        }
+    }
 }
-
-
