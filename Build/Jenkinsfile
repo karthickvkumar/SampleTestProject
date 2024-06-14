@@ -15,7 +15,7 @@ pipeline {
         stage('Run Tests') {
             steps
             {
-              vsTest settings: "bin\\${BuildConfiguration}\\test.runsettings", testFiles: "bin\\${BuildConfiguration}\\BlueRibbonIP.ServiceView.Tests.dll"
+              vsTest settings: "bin\\${BuildConfiguration}\\test.runsettings", testFiles: "bin\\${BuildConfiguration}\\${ProjectName}.dll"
               mstest testResultsFile: "bin\\${BuildConfiguration}\\*.trx", keepLongStdio: true
             }
         }
