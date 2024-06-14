@@ -12,3 +12,4 @@ C:\Users\Karthick\Documents\Concord\Learning\C#\UnitTestProject\obj\Debug\UnitTe
 C:\Users\Karthick\Documents\Concord\Learning\C#\UnitTestProject\obj\Debug\UnitTestProject.csproj.CopyComplete
 C:\Users\Karthick\Documents\Concord\Learning\C#\UnitTestProject\obj\Debug\UnitTestProject.dll
 C:\Users\Karthick\Documents\Concord\Learning\C#\UnitTestProject\obj\Debug\UnitTestProject.pdb
+C:\Users\Karthick\Documents\Concord\Learning\C#\UnitTestProject\bin\Debug\test.runsettings

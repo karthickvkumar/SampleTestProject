@@ -1,0 +1,33 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<RunSettings>
+	<!-- Parameters used by tests at run time -->
+	<TestRunParameters>
+	</TestRunParameters>
+
+	<RunConfiguration>
+    <ResultsDirectory>.\</ResultsDirectory>
+	</RunConfiguration>
+
+	<!-- Configurations for data collectors -->
+	<DataCollectionRunSettings>
+		<DataCollectors>
+			<!-- Configuration for blame data collector -->
+			<DataCollector friendlyName="blame" enabled="True">
+			</DataCollector>
+		</DataCollectors>
+	</DataCollectionRunSettings>
+	
+	<!-- Configuration for loggers -->
+	<LoggerRunSettings>
+		<Loggers>
+			<Logger friendlyName="trx" enabled="True">
+			</Logger>
+			<Logger friendlyName="html" enabled="True">
+				<Configuration>
+          <LogFileName>TestResult.html</LogFileName>
+        </Configuration>
+			</Logger>
+			<Logger friendlyName="blame" enabled="True" />
+		</Loggers>
+	</LoggerRunSettings>
+</RunSettings>
