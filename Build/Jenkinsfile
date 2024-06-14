@@ -9,7 +9,7 @@ pipeline {
     stages {
         stage('Build') {
             steps {
-              bat label: 'BuildProcess', script: "\"${tool name:'MSBuild15', type:'msbuild'}MSBuild.exe\" ${ProjectName}.sln /t:restore,rebuild /p:Configuration=Debug,RestorePackagesConfig=true"
+              bat script: "\"${tool name:'MSBuild15', type:'msbuild'}\\MSBuild.exe\" ${ProjectName}.sln /t:restore,rebuild /p:Configuration=${BuildConfiguration},RestorePackagesConfig=true"
             }
         }
         stage('Run Tests') {
